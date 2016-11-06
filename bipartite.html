@@ -42,12 +42,11 @@
 <script src='https://cdnjs.cloudflare.com/ajax/libs/spin.js/2.0.1/spin.min.js'></script>
 <script>
     redraw = function(data){
-        var color ={Elite:"#3366CC", Grand:"#DC3912",  Lite:"#FF9900", Medium:"#109618", Plus:"#990099", Small:"#0099C6"};
         d3.select("svg").remove();
         var svg = d3.select("#chart").append("svg").attr("width", 1200).attr("height", 800);
-
+        var amount = _.reduce(data, function(num, d){ return d[2] + num; }, 0);
         svg.append("text").attr("x",550).attr("y",70)
-                .attr("class","header").text("得標紀錄");
+                .attr("class","header").text("得標紀錄 總價:" + amount.toLocaleString());
 
 
         var g =[svg.append("g").attr("transform","translate(150,100)")
