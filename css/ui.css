@@ -1,0 +1,22 @@
+html,
+body {
+  margin:0;
+  padding:0;
+  height:100%;
+  background-color:#000000
+}
+
+.scene {
+  background: #000000;
+  overflow: hidden;
+  text-align:center;
+  position: fixed;
+  z-index: 100;
+  border: none;
+  top: 0px;
+  left: 0px;
+  height: 100%;
+  width: 100%;
+  -webkit-transition: width .5s, left .5s;
+  transition: width .5s, left .5s;
+}
