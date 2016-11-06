@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+    text{
+        font-size:7px;
+    }
+    .mainBars rect{
+        shape-rendering: auto;
+        fill-opacity: 0;
+        stroke-width: 0.5px;
+        stroke: rgb(0, 0, 0);
+        stroke-opacity: 0;
+    }
+    .subBars{
+        shape-rendering:crispEdges;
+    }
+    .edges{
+        stroke:none;
+        fill-opacity:0.5;
+    }
+    .header{
+        text-anchor:middle;
+        font-size:16px;
+    }
+    line{
+        stroke:grey;
+    }
+    input{
+        width: 500px;
+    }
+</style>
+<body>
+<input id="myinput" value="環保局"/>
+<section id='chart'></section>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="http://vizjs.org/viz.v1.1.1.min.js"></script>
+<script src="js/colorbrewer.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.1/awesomplete.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.1/awesomplete.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
+<script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/spin.js/2.0.1/spin.min.js'></script>
+<script>
+    redraw = function(data){
+        var color ={Elite:"#3366CC", Grand:"#DC3912",  Lite:"#FF9900", Medium:"#109618", Plus:"#990099", Small:"#0099C6"};
+        d3.select("svg").remove();
+        var svg = d3.select("#chart").append("svg").attr("width", 1200).attr("height", 800);
+
+        svg.append("text").attr("x",550).attr("y",70)
+                .attr("class","header").text("得標紀錄");
+
+
+        var g =[svg.append("g").attr("transform","translate(150,100)")
+            ,svg.append("g").attr("transform","translate(650,100)")];
+        String.prototype.hashCode = function() {
+            var hash = 0, i, chr, len;
+            if (this.length === 0) return hash;
+            for (i = 0, len = this.length; i < len; i++) {
+                chr   = this.charCodeAt(i);
+                hash  = ((hash << 5) - hash) + chr;
+                hash |= 0; // Convert to 32bit integer
+            }
+            return hash;
+        };
+        var bp=[ viz.bP()
+                .data(data)
+                .min(10)
+                .pad(2)
+                .height(800)
+                .width(800)
+                .barSize(20)
+                .fill(function(d){
+                    return colorbrewer["Paired"][6][parseInt(Math.abs(d.primary.hashCode() % 6))]
+                })
+        ];
+
+        [0].forEach(function(i){
+            g[i].call(bp[i])
+
+            g[i].append("text").attr("x",-50).attr("y",-8).style("text-anchor","middle").text("單位");
+            g[i].append("text").attr("x", 850).attr("y",-8).style("text-anchor","middle").text("得標公司");
+
+//            g[i].append("line").attr("x1",-100).attr("x2",0);
+//            g[i].append("line").attr("x1",800).attr("x2",950);
+//
+//            g[i].append("line").attr("y1",610).attr("y2",610).attr("x1",-100).attr("x2",0);
+//            g[i].append("line").attr("y1",610).attr("y2",610).attr("x1",800).attr("x2",900);
+
+            g[i].selectAll(".mainBars")
+                    .on("mouseover",mouseover)
+                    .on("mouseout",mouseout);
+
+            g[i].selectAll(".mainBars").append("text").attr("class","label")
+                    .attr("x",d=>(d.part=="primary"? -30: 30))
+            .attr("y",d=>+6)
+            .text(d=>d.key)
+            .attr("text-anchor",d=>(d.part=="primary"? "end": "start"));
+
+            g[i].selectAll(".mainBars").append("text").attr("class","perc")
+                    .attr("x",d=>(d.part=="primary"? 40: 200))
+            .attr("y",d=>+6)
+            .text(function(d){ return d3.format("0.0%")(d.percent)})
+                    .attr("text-anchor",d=>(d.part=="primary"? "end": "start"));
+        });
+
+        function mouseover(d){
+            [0].forEach(function(i){
+                bp[i].mouseover(d);
+
+                g[i].selectAll(".mainBars").select(".perc")
+                        .text(function(d){ return d3.format("0.0%")(d.percent)});
+            });
+        }
+        function mouseout(d){
+            [0].forEach(function(i){
+                bp[i].mouseout(d);
+
+                g[i].selectAll(".mainBars").select(".perc")
+                        .text(function(d){ return d3.format("0.0%")(d.percent)});
+            });
+        }
+    };
+    var opts = {
+        lines: 9, // The number of lines to draw
+        length: 9, // The length of each line
+        width: 5, // The line thickness
+        radius: 14, // The radius of the inner circle
+        color: '#EE3124', // #rgb or #rrggbb or array of colors
+        speed: 1.9, // Rounds per second
+        trail: 40, // Afterglow percentage
+        className: 'spinner', // The CSS class to assign to the spinner
+    };
+
+    var spinner = new Spinner(opts).spin(document.getElementById("chart"));
+    d3.json("https://s3.amazonaws.com/g0v-tpam/pair_amount_full_zipped.json", function(error, data) {
+        spinner.stop();
+        var names = data.map(function(d){return d[0]});
+        names.concat(data.map(function(d){return d[1]}));
+        var input = document.getElementById("myinput");
+        new Awesomplete(input, {
+            minChars: 1,
+            list: _.unique(names)
+        });
+        var text = "環保局";
+        window.addEventListener("awesomplete-select", function(e){
+            [0].forEach(function(i){
+                redraw(data.filter(function(d){return d[0].indexOf(e.text.label) !== -1 || d[1].indexOf(e.text.label) !== -1}))
+            });
+        }, false);
+        $("#myinput").on('keyup', function (e) {
+            if (e.keyCode == 13) {
+                [0].forEach(function(i){
+                    var text = $("#myinput").val();
+                    redraw(data.filter(function(d){return d[0].indexOf(text) !== -1 || d[1].indexOf(text) !== -1}))
+                })
+            }
+        });
+
+        redraw(data.filter(function(d){return d[0].indexOf(text) !== -1 || d[1].indexOf(text) !== -1}));
+        d3.select(self.frameElement).style("height", "800px");
+    });
+
+</script>
+</body>
+</html>
