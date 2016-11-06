@@ -3,6 +3,9 @@ function getRandomIntInclusive(min, max) {
 	max = Math.floor(max);
 	return Math.floor(Math.random() * (max - min + 1)) + min;
 }
+
+
+
 if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
 
 function View3D(div_id, data) {
@@ -33,12 +36,12 @@ function View3D(div_id, data) {
 
 	this.mouse = new THREE.Vector2(-100000,-100000);
 
-	this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
-	//this.controls.rotateSpeed = 2.0;
-	//this.controls.zoomSpeed = 1.0;
-	//this.controls.panSpeed = 2.0;
-	//this.controls.staticMoving = true;
-	//this.controls.dynamicDampingFactor = 0.3;
+	this.controls = new THREE.TrackballControls(this.camera, this.renderer.domElement);
+	this.controls.rotateSpeed = 2.0;
+	this.controls.zoomSpeed = 1.0;
+	this.controls.panSpeed = 2.0;
+	this.controls.staticMoving = true;
+	this.controls.dynamicDampingFactor = 0.3;
 
 	this.controls.addEventListener('change', this.render.bind(this));
 
@@ -111,6 +114,7 @@ function View3D(div_id, data) {
 		'click': undefined,
 		'dblclick': undefined
 	}
+	this.settings = {};
 
 };
 View3D.prototype.reset = function() {
@@ -147,31 +151,22 @@ View3D.prototype.setLight = function() {
 View3D.prototype.addJSON = function( node, edge ) {
 
 	for ( var key in node ) {
-		this.meshDict[key] = {'highlight':true, 'amount':node[key].amount, 'position': new THREE.Vector3(10*node[key].pos[0], 10*node[key].pos[1], 10*node[key].pos[2])};
-	}
-/*
-	for ( var i=0; i < edge.length; ++i ) {
-		var x = edge[i][0];
-		var y = edge[i][1];
-		if ( !( x in this.meshDict ) ||  !( y in this.meshDict ))
-			continue;
-		++this.meshDict[x].edgeCount;
-		++this.meshDict[y].edgeCount;
-	}
-	edgeCount = [];
-	for (var key in node)
-		edgeCount.push( [key, this.meshDict[key].edgeCount] );
-	edgeCount.sort(function (x,y) {return y[1] - x[1];})
-	console.log( edgeCount );
-*/
-	for ( var key in node ) {//= edgeCount[i][0];
+		this.meshDict[key] = {
+			'highlight':true,
+			'amount':node[key].amount,
+			'position': new THREE.Vector3(10*node[key].pos[0], 10*node[key].pos[1], 10*node[key].pos[2]),
+			'edges': [],
+			'type': 'node',
+			'unit': node[key].type,
+		}
 
 		this.updateBoundingBox( key );
 
 		this.meshNum += 1;
-		if (node[key].type === "company")
-			this.meshDict[key]['color'] = this.lut.getColor( 0.2*getRandomIntInclusive(1, this.maxColorNum) / this.maxColorNum );
-		else
+		if (node[key].type === "company") {
+			//this.meshDict[key]['color'] = this.lut.getColor( 0.2*getRandomIntInclusive(1, this.maxColorNum) / this.maxColorNum );
+			this.meshDict[key]['color'] = this.lut.getColor( 0.05 );
+		} else
 			this.meshDict[key]['color'] = this.lut.getColor( 0.8 + 0.2*getRandomIntInclusive(1, this.maxColorNum)/this.maxColorNum );
 
 		var r = Math.log(this.meshDict[key].amount )/ Math.log(12)/4;
@@ -204,28 +199,51 @@ View3D.prototype.addJSON = function( node, edge ) {
 		if (n[2] > max_amount)
 			max_amount = n[2];
 	}
+	this.max_amount = max_amount;
+	this.min_amount = min_amount;
 	var max_amount = 20000000;
 	for ( var i=0; i < edge.length; ++i ) {
 		var n = edge[i];
+		var key = n[1] + "-" + n[0];
+
+		this.meshDict[key] = {
+			'highlight':false,
+			'amount': n[2],
+			'nodes': [n[0], n[1]],
+			'type': 'edge',
+		}
+
 		var geometry = new THREE.Geometry();
 		geometry.vertices.push( this.meshDict[n[0]].position );
 		geometry.vertices.push( this.meshDict[n[1]].position );
 		var x;
 		if (node[n[0]].type === "company")
-			x = n[0];
-		else
 			x = n[1];
+		else
+			x = n[0];
+		var opacityVal = 0.3 + 0.3*(n[2]-min_amount)/((max_amount-min_amount));
+		var opacityVal = 0.3;
 		var material = new THREE.LineBasicMaterial({ transparent: true, color: this.meshDict[x].color });
 		//material.opacity = 0.55 + 0.45*Math.tanh((n[2]-(max_amount+min_amount)/2)*4/((max_amount-min_amount)/2));
-		material.opacity = 0.3 + 0.3*(n[2]-min_amount)/((max_amount-min_amount));
+		material.opacity = opacityVal;
 		//material.opacity = 0.35;
 		var line = new THREE.Line(geometry, material);
-		this.scene.add( line );
-		if (n[2] < min_amount)
-			min_amount = n[2];
-		if (n[2] > max_amount)
-			max_amount = n[2];
+		var group = new THREE.Object3D();
+		group.add( line );
+
+		/* create label for tooltip if not provided */
+		group.amount = this.meshDict[key].amount;
+		group.uid = key;
+
+		this.meshGroup.add( group );
+		this.meshDict[n[0]].edges.push(key);
+		this.meshDict[n[1]].edges.push(key);
+		this.meshDict[key]['object'] = group;
+		this.meshDict[key]['defaultOpacity'] = opacityVal;
+		this.meshGroup.add( group );
 	}
+
+	this.settings['amount'] = min_amount;
 
 	this.centerCameraAtScene();
 	var dx = 0.5*(this.bbox.x_max - this.bbox.x_min);
@@ -236,12 +254,16 @@ View3D.prototype.addJSON = function( node, edge ) {
 	var center = new THREE.Vector3( this.globalCenter.x, this.globalCenter.y, this.globalCenter.z);
 
 	for (var key in this.meshDict) {
+		if (this.meshDict[key].type == 'edge') continue;
 		var dist = this.meshDict[key].position.distanceTo( center );
-		var val = 0.5 + 0.5*dist/rr;
+		var val = 0.5 + 0.5*(1-dist/rr);
+		if ( this.meshDict[key].unit === 'company')
+			val = 0.6;
 		this.meshDict[key].object.children[0].material.opacity = val;
+		this.meshDict[key].defaultOpacity = val;
 	}
 	this.setLight();
-
+	this.initGui();
 }
 View3D.prototype.centerCameraAtScene = function() {
 	this.globalCenter.x = 0.5 * ( this.bbox.x_min + this.bbox.x_max );
@@ -268,31 +290,6 @@ View3D.prototype.animate = function() {
 	this.controls.update(); // required if controls.enableDamping = true, or if controls.autoRotate = true
 
 	this.render();
-}
-
-View3D.prototype._registerGroup = function(key, group, center) {
-
-	/* create label for tooltip if not provided */
-	group.name = this.meshDict[key].label;
-	group.uid = key;
-
-	this.meshDict[key]['object']  = group;
-	this.meshDict[key]['pinned']  = false;
-
-	/* reset the position of the entire scene */
-	this.meshGroup.translateX(this.globalCenter.x/this.meshNum);
-	this.meshGroup.translateY(this.globalCenter.y/this.meshNum);
-	this.meshGroup.translateZ(this.globalCenter.z/this.meshNum);
-
-	this.meshGroup.add( group );
-
-	/* compute the new global center, and tcenter the the entire scene */
-	this.globalCenter.x = this.globalCenter.x*(this.meshNum-1)/this.meshNum + center.x/this.meshNum;
-	this.globalCenter.y = this.globalCenter.y*(this.meshNum-1)/this.meshNum + center.y/this.meshNum;
-	this.globalCenter.z = this.globalCenter.z*(this.meshNum-1)/this.meshNum + center.z/this.meshNum;
-	this.meshGroup.translateX(-this.globalCenter.x/this.meshNum);
-	this.meshGroup.translateY(-this.globalCenter.y/this.meshNum);
-	this.meshGroup.translateZ(-this.globalCenter.z/this.meshNum);
 }
 
 View3D.prototype.onDocumentMouseClick = function( event ) {
@@ -350,7 +347,7 @@ View3D.prototype.onDocumentMouseMove = function( event ) {
 View3D.prototype.onDocumentMouseLeave = function( event ) {
 	event.preventDefault();
 
-	this.hide3dToolTip();
+	this.hideToolTip();
 	this.resume();
 
 }
@@ -390,12 +387,12 @@ View3D.prototype.render = function() {
 			}
 		}
 		if ( this.currentIntersected !== undefined ) {
-			this.show3dToolTip("<h5>" + this.currentIntersected.name + "</h5><h5>" + this.currentIntersected.amount + "</h5>");
+			this.showToolTip(this.currentIntersected.uid);
 			this.highlight(this.currentIntersected.uid);
 		}
 	} else {
 		if ( this.currentIntersected !== undefined ) {
-			this.hide3dToolTip();
+			this.hideToolTip();
 			this.resume();
 		}
 		this.currentIntersected = undefined;
@@ -447,14 +444,24 @@ View3D.prototype.highlight = function(d) {
 		if (this.meshDict[key]['pinned'])
 			continue;
 		// TODO:
-		var val = (this.meshDict[key]['highlight']) ? 0.2 : 0.05;
+		var val = (this.meshDict[key]['highlight']) ? 0.1 : 0.1;
 		if (this.meshDict[key]['pinned'])
-			val = 0.4;
-		for (i in this.meshDict[key].object.children)
-			this.meshDict[key].object.children[i].material.opacity = val;
+			val = 0.8;
+		if (this.meshDict[key].type === "node")
+			for (i in this.meshDict[key].object.children)
+				this.meshDict[key].object.children[i].material.opacity = val;
+		else
+			this.meshDict[key].object.children[0].material.opacity = val;
 	}
 	for (i in this.meshDict[d].object.children)
 		this.meshDict[d].object.children[i].material.opacity = 1;
+	var edges = this.meshDict[d].edges;
+	for (var i = 0; i < edges.length; ++i ) {
+		this.meshDict[edges[i]].object.children[0].material.opacity = 1;
+		var n = this.meshDict[edges[i]].nodes;
+		var v = (n[0] !==d) ? n[0] : n[1];
+		this.meshDict[v].object.children[0].material.opacity = 1;
+	}
 	this.meshDict[d].object.visible = true;
 	this.isHighlight = true;
 }
@@ -471,9 +478,13 @@ View3D.prototype.resume = function() {
 		this.highlightedObj = null;
 		val = 0.2;
 	} else
-		val = 0.6;
+		val = 1.0;
 	for (i in x)
 		x[i].material.opacity = val;
+	var edges = this.meshDict[d].edges;
+	for (var i = 0; i < edges.length; ++i )
+		if (!this.meshDict[edges[i]].pinned)
+			this.meshDict[edges[i]].object.children[0].material.opacity = val;
 	if (this.pinned.size === 0)
 		this.resetOpacity();
 	this.isHighlight = false;
@@ -481,23 +492,29 @@ View3D.prototype.resume = function() {
 
 
 View3D.prototype.resetOpacity = function() {
-	var val = 0.8;
 	//if (this.pinnedNum > 0)
 	//	val = 0.2;
 	//reset
 	for (var key in this.meshDict) {
-		if (!this.meshDict[key]['highlight'])
-			continue;
 		//var op = (this.meshDict[key]['pinned']) ? 0.6 : val;
 
-		for (i in this.meshDict[key].object.children)
-			this.meshDict[key].object.children[i].material.opacity = val;
+		if ( this.meshDict[key].type == "node" )
+			for (i in this.meshDict[key].object.children)
+				this.meshDict[key].object.children[i].material.opacity = this.meshDict[key].defaultOpacity;
+		else
+			this.meshDict[key].object.children[0].material.opacity = this.meshDict[key].defaultOpacity;
 	}
 }
 
 View3D.prototype.togglePin = function( id ) {
 
 	this.meshDict[id]['pinned'] = !this.meshDict[id]['pinned'];
+	var edges = this.meshDict[id].edges;
+	for (var i = 0; i < edges.length; ++i ) {
+		var e = this.meshDict[edges[i]];
+		e['pinned'] = e.nodes[0].pinned || e.nodes[1].pinned;
+		this.meshDict[edges[i]]['pinned'] = this.meshDict[id]['pinned'];
+	}
 	if (this.meshDict[id]['pinned']) {
 		this.pinned.add(id)
 	} else {
@@ -507,9 +524,11 @@ View3D.prototype.togglePin = function( id ) {
 	if (this.pinned.size == 0)
 		this.resetOpacity();
 	else {
-		var val = (this.meshDict[id]['pinned']) ? 0.8 : 0.2;
-		for (i in this.meshDict[id].object.children)
+		var val = (this.meshDict[id]['pinned']) ? 1.0 : 0.2;
+		for (var i = 0; i < this.meshDict[id].object.children.length; ++i)
 			this.meshDict[id].object.children[i].material.opacity = val;
+		for (var i = 0; i < edges.length; ++i )
+			this.meshDict[edges[i]].object.children[0].material.opacity = val;
 	}
 }
 
@@ -525,18 +544,40 @@ View3D.prototype.unpinAll = function() {
 View3D.prototype.createToolTip = function() {
 	this.toolTipDiv = document.createElement('div');
 	this.toolTipDiv.id = 'toolTip';
-	this.toolTipDiv.style.cssText = 'position: fixed; text-align: center; width: auto; height: 80px; padding: 2px; font: 12px arial; z-index: 999; background: lightgreen; border: 0px; border-radius: 8px; pointer-events: none; opacity: 0.0;';
+	this.toolTipDiv.style.cssText = 'position: fixed; text-align: center; width: auto; height: auto; padding: 2px; font: 12px arial; z-index: 999; background: lightgreen; border: 0px; border-radius: 8px; pointer-events: none; opacity: 0.0;';
 	this.toolTipDiv.style.transition = "opacity 0.5s";
 	document.body.appendChild(this.toolTipDiv);
 }
 
-View3D.prototype.show3dToolTip = function (d) {
+View3D.prototype.showToolTip = function (d) {
 	this.toolTipDiv.style.opacity = .9;
 	this.toolTipDiv.style.left = this.toolTipPos.x + "px";
 	this.toolTipDiv.style.top = this.toolTipPos.y + "px";
-	this.toolTipDiv.innerHTML = d;
+	if (this.meshDict[d].type === 'node') {
+		if (this.meshDict[d].unit === "company")
+			this.toolTipDiv.style.background = "lightgreen";
+		else
+			this.toolTipDiv.style.background = "PaleVioletRed";
+		this.toolTipDiv.innerHTML = "<h5>" + d + "</h5><h5>" + this.meshDict[d].amount + "</h5>";
+	} else {
+		this.toolTipDiv.style.background = "lightblue";
+		this.toolTipDiv.innerHTML = "<h5>" + this.meshDict[d].nodes[1] + "</h5><h5>" + this.meshDict[d].nodes[0] + "</h5><h5>" + this.meshDict[d].amount + "</h5>";
+	}
 }
 
-View3D.prototype.hide3dToolTip = function () {
+View3D.prototype.hideToolTip = function () {
 	this.toolTipDiv.style.opacity = 0.0;
+}
+View3D.prototype.initGui = function () {
+	var gui = new dat.GUI();
+	//var gui = gui.addFolder( "Material" );
+	gui.add( this.settings, "amount" ).min( this.min_amount ).max( this.max_amount ).onChange( (function( value ) {
+		for (var key in this.meshDict) {
+			if (this.meshDict[key].type === 'edge') {
+				this.meshDict[key].object.visible = (this.meshDict[key].amount >= value);
+			}
+		}
+	}).bind(this) );
+	gui.add( {'Unpin All': (function() { this.unpinAll() }).bind(this)}, 'Unpin All' );
+	//gui.add( {'Reset Camera': (function() { this.camera.reset() }).bind(this)}, 'Reset Camera' );
 }
