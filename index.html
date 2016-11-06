@@ -18,14 +18,16 @@
 
     </head>
     <body>
-        <div id="3d-scene" class="scene">
+        <div id="3d-scene" on_click="switchScene()" class="scene scene-sm">
         </div>
 
         <script type='text/javascript' src="http://d3js.org/d3.v3.min.js"></script>
 
+        <script type='text/javascript' src="js/libs/dat.gui.min.js"></script>
         <script type='text/javascript' src="js/libs/Detector.js"></script>
         <script type='text/javascript' src="js/libs/Lut.js"></script>
-        <script type='text/javascript' src="js/libs/OrbitControls.js"></script>
+        <script type='text/javascript' src="js/libs/TrackBallControls.js"></script>
+        <script type='text/javascript' src="js/ResizeSensor.js"></script>
         <script type='text/javascript' src="js/view3d.js"></script>
 
         <script type='text/javascript' src="js/ui_functions.js"></script>
