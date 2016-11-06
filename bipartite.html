@@ -46,7 +46,7 @@
         var svg = d3.select("#chart").append("svg").attr("width", 1200).attr("height", 800);
         var amount = _.reduce(data, function(num, d){ return d[2] + num; }, 0);
         svg.append("text").attr("x",550).attr("y",70)
-                .attr("class","header").text("得標紀錄 總價:" + amount.toLocaleString());
+                .attr("class","header").text("得標紀錄 總價: NT " + amount.toLocaleString());
 
 
         var g =[svg.append("g").attr("transform","translate(150,100)")
